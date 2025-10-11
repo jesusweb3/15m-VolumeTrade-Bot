@@ -1,36 +1,71 @@
 # utils/get_dialogs.py
 import asyncio
-from pathlib import Path
-from pyrogram import Client
-from dotenv import load_dotenv
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+from telethon import TelegramClient
+from telethon.tl.types import Channel, Chat, User
 
-load_dotenv()
+
+def get_chat_type(entity) -> str:
+    """Определение типа чата"""
+    if isinstance(entity, User):
+        return "private" if not entity.bot else "bot"
+    elif isinstance(entity, Channel):
+        return "channel" if entity.broadcast else "supergroup"
+    elif isinstance(entity, Chat):
+        return "group"
+    return "unknown"
 
 
 async def main():
     """Получение списка всех диалогов с их chat ID"""
+    load_dotenv()
+
+    project_root = Path(__file__).resolve().parent.parent
+
+    api_id = os.getenv('API_ID')
+    api_hash = os.getenv('API_HASH')
+    session_name = os.getenv('SESSION_NAME', 'trading_bot_session')
+
+    if not api_id or not api_hash:
+        print("\nОшибка: API_ID и API_HASH должны быть указаны в .env\n")
+        return
+
+    sessions_dir = project_root / 'signals' / 'auth' / 'sessions'
+    session_path = sessions_dir / f"{session_name}.session"
+
+    if not session_path.exists():
+        print("\n" + "=" * 80)
+        print("СЕССИЯ НЕ НАЙДЕНА")
+        print("=" * 80)
+        print(f"\nФайл сессии не найден: {session_path}")
+        print("\nСначала запустите основной проект для создания сессии:")
+        print("  python main.py")
+        print("\nПосле успешной авторизации запустите эту утилиту снова.\n")
+        return
+
     client = None
 
     try:
         print("Подключение к Telegram для получения списка диалогов...")
 
-        sessions_dir = Path(__file__).parent.parent / "signals" / "auth" / "sessions"
-        sessions_dir.mkdir(parents=True, exist_ok=True)
-        session_path = sessions_dir / f"{os.getenv('SESSION_NAME', 'my_account')}.session"
-
-        client = Client(
-            name=str(session_path),
-            api_id=os.getenv("API_ID"),
-            api_hash=os.getenv("API_HASH"),
-            device_model=os.getenv("DEVICE_MODEL"),
-            system_version=os.getenv("SYSTEM_VERSION"),
-            app_version=os.getenv("APP_VERSION"),
-            lang_code=os.getenv("LANG_CODE"),
-            no_updates=True
+        client = TelegramClient(
+            str(session_path),
+            int(api_id),
+            api_hash
         )
 
-        await client.start()
+        await client.connect()
+
+        if not await client.is_user_authorized():
+            print("\n" + "=" * 80)
+            print("СЕССИЯ УСТАРЕЛА")
+            print("=" * 80)
+            print("\nСессия больше не авторизована.")
+            print("Запустите основной проект для повторной авторизации:")
+            print("  python main.py\n")
+            return
 
         print("\n" + "=" * 80)
         print("СПИСОК ВАШИХ ДИАЛОГОВ (КАНАЛЫ, ГРУППЫ, ЧАТЫ)")
@@ -38,12 +73,13 @@ async def main():
 
         dialog_count = 0
 
-        async for dialog in client.get_dialogs():
-            chat = dialog.chat
-            chat_type = chat.type.value
-            chat_title = chat.title or chat.first_name or "Без названия"
-            chat_id = chat.id
-            username = f"@{chat.username}" if chat.username else "Нет username"
+        async for dialog in client.iter_dialogs():
+            entity = dialog.entity
+            chat_type = get_chat_type(entity)
+            chat_title = dialog.name
+            chat_id = dialog.id
+
+            username = f"@{entity.username}" if hasattr(entity, 'username') and entity.username else "Нет username"
 
             print(f"Тип: {chat_type:12} | ID: {chat_id:15} | Username: {username:25} | Название: {chat_title}")
             dialog_count += 1
@@ -57,7 +93,7 @@ async def main():
         print(f"\nОшибка: {e}\n")
     finally:
         if client:
-            await client.stop()
+            await client.disconnect()
         print("Готово!")
 
 

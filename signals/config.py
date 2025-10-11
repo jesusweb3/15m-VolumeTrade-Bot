@@ -1,42 +1,51 @@
-# signals/config.py
+# signals/auth/config.py
 import os
+from dataclasses import dataclass
 from dotenv import load_dotenv
-from utils.logger import get_logger
-
-logger = get_logger(__name__)
-
-load_dotenv()
 
 
-class SignalsConfig:
-    API_ID: str = os.getenv("API_ID", "")
-    API_HASH: str = os.getenv("API_HASH", "")
-    PHONE_NUMBER: str = os.getenv("PHONE_NUMBER", "")
-    SESSION_NAME: str = os.getenv("SESSION_NAME", "")
-    DEVICE_MODEL: str = os.getenv("DEVICE_MODEL", "")
-    SYSTEM_VERSION: str = os.getenv("SYSTEM_VERSION", "")
-    APP_VERSION: str = os.getenv("APP_VERSION", "")
-    LANG_CODE: str = os.getenv("LANG_CODE", "")
+@dataclass
+class AuthConfig:
+    """Конфигурация для авторизации в Telegram"""
+
+    api_id: int
+    api_hash: str
+    phone: str
+    session_name: str
 
     @classmethod
-    def validate(cls) -> None:
-        """Валидация обязательных параметров"""
-        required_fields = {
-            "API_ID": cls.API_ID,
-            "API_HASH": cls.API_HASH,
-            "PHONE_NUMBER": cls.PHONE_NUMBER,
-            "SESSION_NAME": cls.SESSION_NAME,
-            "DEVICE_MODEL": cls.DEVICE_MODEL,
-            "SYSTEM_VERSION": cls.SYSTEM_VERSION,
-            "APP_VERSION": cls.APP_VERSION,
-            "LANG_CODE": cls.LANG_CODE
-        }
+    def from_env(cls) -> "AuthConfig":
+        """
+        Загрузка конфигурации из .env файла
 
-        missing_fields = [field for field, value in required_fields.items() if not value]
+        Returns:
+            AuthConfig экземпляр
 
-        if missing_fields:
-            logger.error(f"Отсутствуют обязательные параметры: {', '.join(missing_fields)}")
-            raise ValueError(f"Отсутствуют обязательные параметры в .env: {', '.join(missing_fields)}")
+        Raises:
+            ValueError: Если обязательные параметры отсутствуют или некорректны
+        """
+        load_dotenv()
 
+        api_id_str = os.getenv('API_ID')
+        api_hash = os.getenv('API_HASH')
+        phone = os.getenv('PHONE_NUMBER')
+        session_name = os.getenv('SESSION_NAME', 'trading_bot_session')
 
-SignalsConfig.validate()
+        if not api_id_str:
+            raise ValueError("API_ID должен быть указан в .env")
+        if not api_hash:
+            raise ValueError("API_HASH должен быть указан в .env")
+        if not phone:
+            raise ValueError("PHONE_NUMBER должен быть указан в .env")
+
+        try:
+            api_id = int(api_id_str)
+        except ValueError:
+            raise ValueError("API_ID должен быть числом")
+
+        return cls(
+            api_id=api_id,
+            api_hash=api_hash,
+            phone=phone,
+            session_name=session_name
+        )

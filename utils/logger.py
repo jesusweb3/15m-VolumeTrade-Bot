@@ -1,8 +1,8 @@
 # utils/logger.py
 import logging
 import sys
-import os
 from datetime import datetime
+from pathlib import Path
 
 
 class MillisecondFormatter(logging.Formatter):
@@ -45,12 +45,11 @@ def get_logger(name: str, level: int = logging.INFO) -> logging.Logger:
     console_handler.setLevel(level)
     console_handler.setFormatter(formatter)
 
-    logs_dir = "logs"
-    if not os.path.exists(logs_dir):
-        os.makedirs(logs_dir)
+    project_root = Path(__file__).resolve().parent.parent
+    logs_dir = project_root / "logs"
+    logs_dir.mkdir(exist_ok=True)
 
-    current_date = datetime.now().strftime('%Y-%m-%d')
-    log_file_path = os.path.join(logs_dir, f"{current_date}.log")
+    log_file_path = logs_dir / "logs.txt"
 
     file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
     file_handler.setLevel(level)

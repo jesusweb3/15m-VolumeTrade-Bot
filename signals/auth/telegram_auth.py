@@ -1,112 +1,106 @@
 # signals/auth/telegram_auth.py
-import asyncio
 from pathlib import Path
-from pyrogram import Client
-from pyrogram.errors import SessionPasswordNeeded, PhoneNumberInvalid, BadRequest, Unauthorized
+from typing import Optional
+from telethon import TelegramClient
+from telethon.errors import SessionPasswordNeededError
+from signals.config import AuthConfig
 from utils.logger import get_logger
-from signals.config import SignalsConfig
-
-logger = get_logger(__name__)
-
-
-async def ainput(prompt: str) -> str:
-    """Асинхронный ввод с поддержкой UTF-8"""
-    return await asyncio.to_thread(input, prompt)
 
 
 class TelegramAuth:
-    def __init__(self, api_id: str, api_hash: str, phone_number: str, session_name: str,
-                 device_model: str, system_version: str, app_version: str, lang_code: str):
-        self.api_id = api_id
-        self.api_hash = api_hash
-        self.phone_number = phone_number
-        self.session_name = session_name
-        self.device_model = device_model
-        self.system_version = system_version
-        self.app_version = app_version
-        self.lang_code = lang_code
+    """Управление авторизацией в Telegram аккаунте"""
 
-        self.sessions_dir = Path(__file__).parent / "sessions"
-        self.sessions_dir.mkdir(exist_ok=True)
+    def __init__(self, config: Optional[AuthConfig] = None):
+        self.logger = get_logger(__name__)
 
-        self.session_path = self.sessions_dir / f"{self.session_name}.session"
-        self.client: Client | None = None
-        self.is_connected: bool = False
+        self.config = config if config else AuthConfig.from_env()
 
-    @classmethod
-    def from_config(cls) -> "TelegramAuth":
-        """Создание экземпляра из конфигурации"""
-        return cls(
-            api_id=SignalsConfig.API_ID,
-            api_hash=SignalsConfig.API_HASH,
-            phone_number=SignalsConfig.PHONE_NUMBER,
-            session_name=SignalsConfig.SESSION_NAME,
-            device_model=SignalsConfig.DEVICE_MODEL,
-            system_version=SignalsConfig.SYSTEM_VERSION,
-            app_version=SignalsConfig.APP_VERSION,
-            lang_code=SignalsConfig.LANG_CODE
-        )
+        project_root = Path(__file__).resolve().parent.parent.parent
+        self.sessions_dir = project_root / 'signals' / 'auth' / 'sessions'
+        self.sessions_dir.mkdir(parents=True, exist_ok=True)
 
-    async def connect(self) -> Client:
-        """Основной метод подключения к Telegram"""
-        logger.info("Начало подключения к Telegram")
+        self.session_path = self.sessions_dir / f"{self.config.session_name}.session"
 
-        self.client = Client(
-            name=str(self.session_path),
-            api_id=self.api_id,
-            api_hash=self.api_hash,
-            device_model=self.device_model,
-            system_version=self.system_version,
-            app_version=self.app_version,
-            lang_code=self.lang_code,
-            no_updates=True
+        self.client: Optional[TelegramClient] = None
+
+    async def connect(self) -> TelegramClient:
+        """
+        Подключение к Telegram аккаунту
+
+        Returns:
+            Активный TelegramClient
+        """
+        if self.client and self.client.is_connected():
+            self.logger.info("Клиент уже подключен")
+            return self.client
+
+        self.client = TelegramClient(
+            str(self.session_path),
+            self.config.api_id,
+            self.config.api_hash,
+            device_model="Trading Bot Server",
+            system_version="1.0",
+            app_version="1.0.0",
+            lang_code="en",
+            system_lang_code="en"
         )
 
         await self.client.connect()
-        self.is_connected = True
 
-        try:
-            user = await self.client.get_me()
-            logger.info(f"Успешное подключение как {user.first_name} (ID: {user.id})")
-        except (BadRequest, Unauthorized):
-            logger.info("Требуется авторизация")
+        if not await self.client.is_user_authorized():
+            self.logger.info("Требуется авторизация")
             await self._authorize()
-            user = await self.client.get_me()
-            logger.info(f"Успешное подключение как {user.first_name} (ID: {user.id})")
+        else:
+            self.logger.info("Сессия активна, авторизация не требуется")
+
+        me = await self.client.get_me()
+        self.logger.info(f"Подключен как: {me.first_name} (@{me.username if me.username else 'no username'})")
 
         return self.client
 
     async def _authorize(self) -> None:
-        """Авторизация пользователя"""
+        """Процесс авторизации с обработкой кода и 2FA"""
+        await self.client.send_code_request(self.config.phone)
+        self.logger.info(f"Код отправлен на {self.config.phone}")
+
+        code = input("Введите код из Telegram: ").strip()
+
         try:
-            sent_code = await self.client.send_code(self.phone_number)
-
-            try:
-                code = await ainput(f"Введите код отправленный на {self.phone_number}: ")
-            except asyncio.CancelledError:
-                logger.info("Авторизация прервана пользователем")
-                raise KeyboardInterrupt
-
-            await self.client.sign_in(self.phone_number, sent_code.phone_code_hash, code)
-
-        except SessionPasswordNeeded:
-            try:
-                password = await ainput("Введите пароль двухфакторной аутентификации: ")
-            except asyncio.CancelledError:
-                logger.info("Авторизация прервана пользователем")
-                raise KeyboardInterrupt
-
-            await self.client.check_password(password)
-
-        except PhoneNumberInvalid:
-            logger.error(f"Неверный номер телефона: {self.phone_number}")
-            raise ValueError(f"Неверный номер телефона: {self.phone_number}")
+            await self.client.sign_in(self.config.phone, code)
+            self.logger.info("Авторизация успешна")
+        except SessionPasswordNeededError:
+            self.logger.info("Требуется 2FA пароль")
+            password = input("Введите 2FA пароль: ").strip()
+            await self.client.sign_in(password=password)
+            self.logger.info("Авторизация с 2FA успешна")
 
     async def disconnect(self) -> None:
-        """Отключение от Telegram"""
-        if self.client and self.is_connected:
-            try:
-                await self.client.disconnect()
-                self.is_connected = False
-            except Exception as e:
-                logger.warning(f"Ошибка при отключении: {e}")
+        """Корректное отключение клиента"""
+        if self.client and self.client.is_connected():
+            await self.client.disconnect()
+            self.logger.info("Клиент отключен")
+
+    async def is_authorized(self) -> bool:
+        """
+        Проверка статуса авторизации
+
+        Returns:
+            True если авторизован, False иначе
+        """
+        if not self.client:
+            return False
+
+        try:
+            return await self.client.is_user_authorized()
+        except Exception as e:
+            self.logger.error(f"Ошибка проверки авторизации: {e}")
+            return False
+
+    def get_client(self) -> Optional[TelegramClient]:
+        """
+        Получение текущего клиента
+
+        Returns:
+            TelegramClient или None
+        """
+        return self.client

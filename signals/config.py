@@ -1,6 +1,7 @@
-# signals/auth/config.py
+# signals/config.py
 import os
 from dataclasses import dataclass
+from typing import List
 from dotenv import load_dotenv
 
 
@@ -49,3 +50,79 @@ class AuthConfig:
             phone=phone,
             session_name=session_name
         )
+
+
+@dataclass
+class Channel:
+    """Конфигурация канала для парсинга"""
+
+    name: str
+    chat_id: int
+    enabled: bool
+
+
+@dataclass
+class ChannelsConfig:
+    """Конфигурация всех каналов"""
+
+    channels: List[Channel]
+
+    @classmethod
+    def from_env(cls) -> "ChannelsConfig":
+        """
+        Загрузка конфигурации каналов из .env файла
+
+        Returns:
+            ChannelsConfig экземпляр
+        """
+        load_dotenv()
+
+        channels = []
+
+        channel_prefixes = set()
+        for key in os.environ.keys():
+            if key.startswith('CHANNEL_') and not key.endswith('_ENABLED'):
+                prefix = key
+                channel_prefixes.add(prefix)
+
+        for prefix in channel_prefixes:
+            chat_id_str = os.getenv(prefix)
+            enabled_str = os.getenv(f"{prefix}_ENABLED", "false")
+
+            if not chat_id_str:
+                continue
+
+            try:
+                chat_id = int(chat_id_str)
+            except ValueError:
+                continue
+
+            enabled = enabled_str.lower() in ('true', '1', 'yes')
+
+            name = prefix.replace('CHANNEL_', '').lower()
+
+            channels.append(Channel(
+                name=name,
+                chat_id=chat_id,
+                enabled=enabled
+            ))
+
+        return cls(channels=channels)
+
+    def get_active_channels(self) -> List[Channel]:
+        """
+        Получение списка активных каналов
+
+        Returns:
+            Список активных каналов
+        """
+        return [ch for ch in self.channels if ch.enabled]
+
+    def get_active_chat_ids(self) -> List[int]:
+        """
+        Получение списка ID активных каналов
+
+        Returns:
+            Список chat_id активных каналов
+        """
+        return [ch.chat_id for ch in self.channels if ch.enabled]

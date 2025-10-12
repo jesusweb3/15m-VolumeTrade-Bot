@@ -1,6 +1,7 @@
 # main.py
 import asyncio
 from signals.auth.telegram_auth import TelegramAuth
+from signals.parser.channel_parser import ChannelParser
 from utils.logger import get_logger
 
 
@@ -10,6 +11,7 @@ class BotApplication:
     def __init__(self):
         self.logger = get_logger(__name__)
         self.telegram_auth = TelegramAuth()
+        self.channel_parser = None
         self.running = False
         self.shutdown_event = asyncio.Event()
 
@@ -18,7 +20,10 @@ class BotApplication:
         self.logger.info("Запуск торгового бота")
 
         try:
-            await self.telegram_auth.connect()
+            client = await self.telegram_auth.connect()
+
+            self.channel_parser = ChannelParser(client)
+            await self.channel_parser.start()
 
             self.running = True
             self.logger.info("Бот активен и готов к работе")

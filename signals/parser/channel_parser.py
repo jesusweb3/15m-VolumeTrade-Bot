@@ -1,4 +1,5 @@
 # signals/parser/channel_parser.py
+import asyncio
 from typing import Optional
 from telethon import TelegramClient, events
 from signals.config import ChannelsConfig
@@ -10,9 +11,15 @@ from utils.logger import get_logger
 class ChannelParser:
     """Парсер сообщений из Telegram каналов"""
 
-    def __init__(self, client: TelegramClient, channels_config: Optional[ChannelsConfig] = None):
+    def __init__(
+            self,
+            client: TelegramClient,
+            signal_queue: asyncio.Queue,
+            channels_config: Optional[ChannelsConfig] = None
+    ):
         self.logger = get_logger(__name__)
         self.client = client
+        self.signal_queue = signal_queue
         self.channels_config = channels_config if channels_config else ChannelsConfig.from_env()
         self.active_channels = self.channels_config.get_active_channels()
         self.active_chat_ids = self.channels_config.get_active_chat_ids()
@@ -52,7 +59,8 @@ class ChannelParser:
             signal = SignalParser.parse(message_text)
 
             if signal:
-                self.logger.info(f"[{channel_name}] Получен сигнал: {signal}")
+                await self.signal_queue.put(signal)
+                self.logger.info(f"[{channel_name}] Сигнал добавлен в очередь: {signal}")
             else:
                 self.logger.warning(f"[{channel_name}] Не удалось распарсить сигнал")
 

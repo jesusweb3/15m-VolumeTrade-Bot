@@ -2,6 +2,10 @@
 import asyncio
 from signals.auth.telegram_auth import TelegramAuth
 from signals.parser.channel_parser import ChannelParser
+from trading.config import TradingConfig
+from trading.bybit_client import BybitClient
+from trading.position_manager import PositionManager
+from trading.signal_processor import process_signals_queue
 from utils.logger import get_logger
 
 
@@ -11,7 +15,9 @@ class BotApplication:
     def __init__(self):
         self.logger = get_logger(__name__)
         self.telegram_auth = TelegramAuth()
+        self.signal_queue = asyncio.Queue()
         self.channel_parser = None
+        self.position_manager = None
         self.running = False
         self.shutdown_event = asyncio.Event()
 
@@ -22,13 +28,20 @@ class BotApplication:
         try:
             client = await self.telegram_auth.connect()
 
-            self.channel_parser = ChannelParser(client)
-            await self.channel_parser.start()
+            trading_config = TradingConfig.from_env()
+            bybit_client = BybitClient(trading_config)
+            self.position_manager = PositionManager(bybit_client, trading_config)
+
+            self.channel_parser = ChannelParser(client, self.signal_queue)
 
             self.running = True
             self.logger.info("Бот активен и готов к работе")
 
-            await self.shutdown_event.wait()
+            await asyncio.gather(
+                self.channel_parser.start(),
+                process_signals_queue(self.signal_queue, self.position_manager),
+                self.shutdown_event.wait()
+            )
 
         except Exception as e:
             self.logger.error(f"Критическая ошибка: {e}", exc_info=True)

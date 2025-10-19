@@ -18,5 +18,5 @@ class Signal:
         tps = ", ".join([f"{tp:.4f}" for tp in self.take_profits])
         return (
             f"Signal({self.asset} {self.direction} {self.leverage}x | "
-            f"TPs: [{tps}] | SL: {self.stop_loss:.4f})"
+            f"Entry: {self.entry:.4f} | TPs: [{tps}] | SL: {self.stop_loss:.4f})"
         )

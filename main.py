@@ -3,7 +3,7 @@ import asyncio
 from signals.auth.telegram_auth import TelegramAuth
 from signals.parser.channel_parser import ChannelParser
 from trading.config import TradingConfig
-from trading.bybit_client import BybitClient
+from trading.xt_client import XTClient
 from trading.position_manager import PositionManager
 from trading.signal_processor import process_signals_queue
 from utils.logger import get_logger
@@ -23,14 +23,14 @@ class BotApplication:
 
     async def start(self):
         """Запуск бота"""
-        self.logger.info("Запуск торгового бота")
+        self.logger.info("Запуск торгового бота (XT)")
 
         try:
             client = await self.telegram_auth.connect()
 
             trading_config = TradingConfig.from_env()
-            bybit_client = BybitClient(trading_config)
-            self.position_manager = PositionManager(bybit_client, trading_config)
+            xt_client = XTClient(trading_config)
+            self.position_manager = PositionManager(xt_client, trading_config)
 
             self.channel_parser = ChannelParser(client, self.signal_queue)
 

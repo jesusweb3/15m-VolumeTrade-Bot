@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 @dataclass
 class TradingConfig:
-    """Конфигурация для торговли"""
+    """Конфигурация для торговли на XT"""
 
     balance: float
     amount: float
@@ -28,17 +28,17 @@ class TradingConfig:
 
         balance_str = os.getenv('BALANCE')
         amount_str = os.getenv('AMOUNT')
-        api_key = os.getenv('BYBIT_API_KEY')
-        api_secret = os.getenv('BYBIT_API_SECRET')
+        api_key = os.getenv('XT_API_KEY')
+        api_secret = os.getenv('XT_API_SECRET')
 
         if not balance_str:
             raise ValueError("BALANCE должен быть указан в .env")
         if not amount_str:
             raise ValueError("AMOUNT должен быть указан в .env")
         if not api_key:
-            raise ValueError("BYBIT_API_KEY должен быть указан в .env")
+            raise ValueError("XT_API_KEY должен быть указан в .env")
         if not api_secret:
-            raise ValueError("BYBIT_API_SECRET должен быть указан в .env")
+            raise ValueError("XT_API_SECRET должен быть указан в .env")
 
         try:
             balance = float(balance_str)

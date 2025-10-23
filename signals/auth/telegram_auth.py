@@ -34,10 +34,19 @@ class TelegramAuth:
             self.logger.info("Клиент уже подключен")
             return self.client
 
+        self.logger.info(
+            "Инициализация TelegramClient с параметрами: "
+            "auto_reconnect=True, connection_retries=5, retry_delay=5s, timeout=10s"
+        )
+
         self.client = TelegramClient(
             str(self.session_path),
             self.config.api_id,
             self.config.api_hash,
+            auto_reconnect=True,
+            connection_retries=5,
+            retry_delay=5,
+            timeout=10,
             device_model="Trading Bot Server",
             system_version="1.0",
             app_version="1.0.0",

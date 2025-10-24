@@ -1,6 +1,6 @@
 # signals/parser/channel_parser.py
 import asyncio
-from typing import Optional
+from typing import Optional, Set
 from telethon import TelegramClient, events
 from signals.config import ChannelsConfig
 from signals.parser.signal_validator import SignalValidator
@@ -23,13 +23,20 @@ class ChannelParser:
         self.channels_config = channels_config if channels_config else ChannelsConfig.from_env()
         self.active_channels = self.channels_config.get_active_channels()
         self.active_chat_ids = self.channels_config.get_active_chat_ids()
+        self._running = False
+        self._processed_message_ids: Set[int] = set()
 
     async def start(self):
         """Запуск прослушивания каналов"""
+        if self._running:
+            self.logger.warning("Парсер уже запущен")
+            return
+
         if not self.active_chat_ids:
             self.logger.warning("Нет активных каналов для прослушивания")
             return
 
+        self._running = True
         self.logger.info(f"Запуск парсера для {len(self.active_channels)} каналов:")
         for channel in self.active_channels:
             self.logger.info(f"  - {channel.name} (ID: {channel.chat_id})")
@@ -48,7 +55,15 @@ class ChannelParser:
             event: Событие NewMessage от Telethon
         """
         try:
+            message_id = event.message.id
             chat_id = event.chat_id
+
+            if message_id in self._processed_message_ids:
+                self.logger.debug(f"Сообщение {message_id} уже обработано, пропуск")
+                return
+
+            self._processed_message_ids.add(message_id)
+
             message_text = event.message.text or ""
 
             if not SignalValidator.is_signal(message_text):
@@ -81,3 +96,14 @@ class ChannelParser:
             if channel.chat_id == chat_id:
                 return channel.name
         return "unknown"
+
+    def _cleanup_processed_ids(self, max_size: int = 10000):
+        """
+        Очистка старых ID сообщений при превышении лимита
+
+        Args:
+            max_size: Максимальный размер кеша ID
+        """
+        if len(self._processed_message_ids) > max_size:
+            self._processed_message_ids.clear()
+            self.logger.debug(f"Кеш ID сообщений очищен (размер был > {max_size})")

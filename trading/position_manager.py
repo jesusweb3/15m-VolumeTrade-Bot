@@ -4,16 +4,18 @@ from decimal import Decimal, ROUND_DOWN
 from signals.models import Signal
 from trading.xt_client import XTClient
 from trading.config import TradingConfig
+from trading.symbols_cache import SymbolsCache
 from utils.logger import get_logger
 
 
 class PositionManager:
     """Управление торговыми позициями на XT"""
 
-    def __init__(self, xt_client: XTClient, config: TradingConfig):
+    def __init__(self, xt_client: XTClient, config: TradingConfig, symbols_cache: SymbolsCache):
         self.logger = get_logger(__name__)
         self.xt_client = xt_client
         self.config = config
+        self.symbols_cache = symbols_cache
 
     def calculate_position_size(
             self,
@@ -97,6 +99,12 @@ class PositionManager:
         try:
             symbol = signal.asset.replace('/', '')
 
+            normalized_symbol = XTClient.normalize_symbol(symbol)
+
+            if not self.symbols_cache.is_tradeable(normalized_symbol):
+                self.logger.info(f"Актив не разрешён для торговли через API: {signal.asset}")
+                return
+
             try:
                 await self.xt_client.set_leverage(symbol, signal.leverage)
             except RuntimeError as e:
@@ -105,7 +113,7 @@ class PositionManager:
                     return
                 raise
 
-            contract_size = await self.xt_client.get_contract_size(symbol)
+            contract_size = self.symbols_cache.get_contract_size(normalized_symbol)
 
             position_size = self.calculate_position_size(
                 signal.entry,

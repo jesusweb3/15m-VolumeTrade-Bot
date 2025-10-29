@@ -22,7 +22,7 @@ class XTClient:
         )
 
     @staticmethod
-    def _normalize_symbol(symbol: str) -> str:
+    def normalize_symbol(symbol: str) -> str:
         """Нормализация символа: BTC/USDT -> btc_usdt"""
         s = symbol.replace("/", "_").replace("-", "_")
         if s.isupper() and s.endswith("USDT"):
@@ -44,7 +44,7 @@ class XTClient:
         """Установка кредитного плеча для обеих сторон (Long/Short)"""
         def _set():
             return self.perp.set_account_leverage(
-                symbol=self._normalize_symbol(symbol),
+                symbol=self.normalize_symbol(symbol),
                 leverage=leverage,
                 position_side="BOTH",
             )
@@ -73,7 +73,7 @@ class XTClient:
 
     async def get_contract_size(self, symbol: str) -> float:
         """Получение размера контракта (минимальный increment)"""
-        normalized = self._normalize_symbol(symbol)
+        normalized = self.normalize_symbol(symbol)
 
         def _get():
             url = f"{self.host}/future/market/v1/public/symbol/detail"
@@ -125,7 +125,7 @@ class XTClient:
 
         def _place():
             return self.perp.send_order(
-                symbol=self._normalize_symbol(symbol),
+                symbol=self.normalize_symbol(symbol),
                 amount=int(qty),
                 order_side=side,
                 order_type="MARKET",
@@ -172,7 +172,7 @@ class XTClient:
         self.logger.info(f"Выставление {len(orders)} TP ордеров для {symbol}")
 
         side = "SELL" if position_side == "LONG" else "BUY"
-        normalized = self._normalize_symbol(symbol)
+        normalized = self.normalize_symbol(symbol)
         order_ids = []
 
         for i, order in enumerate(orders, start=1):

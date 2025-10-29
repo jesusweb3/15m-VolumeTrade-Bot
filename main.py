@@ -4,6 +4,7 @@ from signals.auth.telegram_auth import TelegramAuth
 from signals.parser.channel_parser import ChannelParser
 from trading.config import TradingConfig
 from trading.xt_client import XTClient
+from trading.symbols_cache import SymbolsCache
 from trading.position_manager import PositionManager
 from trading.signal_processor import process_signals_queue
 from utils.logger import get_logger, initialize_logging
@@ -30,7 +31,11 @@ class BotApplication:
 
             trading_config = TradingConfig.from_env()
             xt_client = XTClient(trading_config)
-            self.position_manager = PositionManager(xt_client, trading_config)
+
+            symbols_cache = SymbolsCache()
+            await symbols_cache.load()
+
+            self.position_manager = PositionManager(xt_client, trading_config, symbols_cache)
 
             self.channel_parser = ChannelParser(client, self.signal_queue)
 

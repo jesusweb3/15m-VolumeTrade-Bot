@@ -1,6 +1,6 @@
 # signals/parser/channel_parser.py
 import asyncio
-from typing import Optional, Set, Dict
+from typing import Optional, Set, Dict, Tuple
 from telethon import TelegramClient, events
 from signals.config import ChannelsConfig
 from signals.parser.signal_validator import SignalValidator
@@ -25,7 +25,7 @@ class ChannelParser:
         self.active_chat_ids = self.channels_config.get_active_chat_ids()
         self._chat_id_to_title: Dict[int, str] = {}
         self._running = False
-        self._processed_message_ids: Set[int] = set()
+        self._processed_signals: Set[Tuple[str, str, float]] = set()
         self._lock = asyncio.Lock()
         self._handler_registered = False
         self._stop_event = asyncio.Event()
@@ -101,16 +101,7 @@ class ChannelParser:
             event: Событие NewMessage от Telethon
         """
         try:
-            message_id = event.message.id
             chat_id = event.chat_id
-
-            async with self._lock:
-                if message_id in self._processed_message_ids:
-                    self.logger.debug(f"Сообщение {message_id} уже обработано, пропуск")
-                    return
-
-                self._processed_message_ids.add(message_id)
-
             message_text = event.message.text or ""
 
             if not SignalValidator.is_signal(message_text):
@@ -120,11 +111,21 @@ class ChannelParser:
 
             signal = SignalParser.parse(message_text)
 
-            if signal:
-                await self.signal_queue.put(signal)
-                self.logger.info(f"[{channel_title}] Сигнал добавлен в очередь: {signal}")
-            else:
+            if not signal:
                 self.logger.warning(f"[{channel_title}] Не удалось распарсить сигнал")
+                return
+
+            signal_key = (signal.asset, signal.direction, signal.entry)
+
+            async with self._lock:
+                if signal_key in self._processed_signals:
+                    self.logger.debug(f"[{channel_title}] Сигнал уже обработан: {signal_key}")
+                    return
+
+                self._processed_signals.add(signal_key)
+
+            await self.signal_queue.put(signal)
+            self.logger.info(f"[{channel_title}] Сигнал добавлен в очередь: {signal}")
 
         except Exception as e:
             self.logger.error(f"Ошибка обработки сообщения: {e}", exc_info=True)
@@ -156,14 +157,3 @@ class ChannelParser:
             Название канала или 'ID: {chat_id}'
         """
         return self._chat_id_to_title.get(chat_id, f"ID: {chat_id}")
-
-    def _cleanup_processed_ids(self, max_size: int = 10000):
-        """
-        Очистка старых ID сообщений при превышении лимита
-
-        Args:
-            max_size: Максимальный размер кеша ID
-        """
-        if len(self._processed_message_ids) > max_size:
-            self._processed_message_ids.clear()
-            self.logger.debug(f"Кеш ID сообщений очищен (размер был > {max_size})")

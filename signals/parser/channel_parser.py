@@ -63,7 +63,8 @@ class ChannelParser:
 
         await self._load_channel_titles()
 
-        self.logger.info(f"Запущен парсер для {len(self.active_channels)} канала{'ов' if len(self.active_channels) > 1 else ''}:")
+        channel_word = self._get_channel_word(len(self.active_channels))
+        self.logger.info(f"Запущен парсер для {len(self.active_channels)} {channel_word}:")
         for chat_id in self.active_chat_ids:
             title = self._chat_id_to_title.get(chat_id, f"ID: {chat_id}")
             self.logger.info(f"  - {title} (ID: {chat_id})")
@@ -127,6 +128,22 @@ class ChannelParser:
 
         except Exception as e:
             self.logger.error(f"Ошибка обработки сообщения: {e}", exc_info=True)
+
+    @staticmethod
+    def _get_channel_word(count: int) -> str:
+        """
+        Правильное склонение слова 'канал' для родительного падежа (для X)
+
+        Args:
+            count: Количество каналов
+
+        Returns:
+            Правильно склоненное слово
+        """
+        if count % 10 == 1 and count % 100 != 11:
+            return "канала"
+        else:
+            return "каналов"
 
     def _get_channel_title(self, chat_id: int) -> str:
         """

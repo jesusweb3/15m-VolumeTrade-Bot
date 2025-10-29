@@ -25,6 +25,10 @@ class ChannelParser:
         self.active_chat_ids = self.channels_config.get_active_chat_ids()
         self._running = False
         self._processed_message_ids: Set[int] = set()
+        self._lock = asyncio.Lock()
+        self._handler_registered = False
+        self._stop_event = asyncio.Event()
+        self._ready_event = asyncio.Event()
 
     async def start(self):
         """Запуск прослушивания каналов"""
@@ -37,15 +41,33 @@ class ChannelParser:
             return
 
         self._running = True
-        self.logger.info(f"Запуск парсера для {len(self.active_channels)} каналов:")
+        self.logger.info(f"Запущен парсер для {len(self.active_channels)} канала{'ов' if len(self.active_channels) > 1 else ''}:")
         for channel in self.active_channels:
             self.logger.info(f"  - {channel.name} (ID: {channel.chat_id})")
 
-        @self.client.on(events.NewMessage(chats=self.active_chat_ids))
-        async def handler(event):
-            await self._handle_new_message(event)
+        if not self._handler_registered:
+            @self.client.on(events.NewMessage(chats=self.active_chat_ids))
+            async def handler(event):
+                await self._handle_new_message(event)
 
-        self.logger.info("Парсер активен, ожидание новых сообщений...")
+            self._handler_registered = True
+
+        self._ready_event.set()
+
+        try:
+            await self._stop_event.wait()
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self._running = False
+
+    def stop(self):
+        """Остановка парсера"""
+        self._stop_event.set()
+
+    async def wait_ready(self):
+        """Ожидание готовности парсера"""
+        await self._ready_event.wait()
 
     async def _handle_new_message(self, event):
         """
@@ -58,11 +80,12 @@ class ChannelParser:
             message_id = event.message.id
             chat_id = event.chat_id
 
-            if message_id in self._processed_message_ids:
-                self.logger.debug(f"Сообщение {message_id} уже обработано, пропуск")
-                return
+            async with self._lock:
+                if message_id in self._processed_message_ids:
+                    self.logger.debug(f"Сообщение {message_id} уже обработано, пропуск")
+                    return
 
-            self._processed_message_ids.add(message_id)
+                self._processed_message_ids.add(message_id)
 
             message_text = event.message.text or ""
 

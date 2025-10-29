@@ -6,7 +6,7 @@ from trading.config import TradingConfig
 from trading.xt_client import XTClient
 from trading.position_manager import PositionManager
 from trading.signal_processor import process_signals_queue
-from utils.logger import get_logger
+from utils.logger import get_logger, initialize_logging
 
 
 class BotApplication:
@@ -35,11 +35,17 @@ class BotApplication:
             self.channel_parser = ChannelParser(client, self.signal_queue)
 
             self.running = True
+
+            parser_task = asyncio.create_task(self.channel_parser.start())
+            processor_task = asyncio.create_task(process_signals_queue(self.signal_queue, self.position_manager))
+
+            await self.channel_parser.wait_ready()
+
             self.logger.info("Бот активен и готов к работе")
 
             await asyncio.gather(
-                self.channel_parser.start(),
-                process_signals_queue(self.signal_queue, self.position_manager),
+                parser_task,
+                processor_task,
                 self.shutdown_event.wait()
             )
 
@@ -54,20 +60,25 @@ class BotApplication:
             return
 
         self.running = False
-        self.logger.info("Остановка бота...")
+
+        if self.channel_parser:
+            self.channel_parser.stop()
+
         await self.telegram_auth.disconnect()
-        self.logger.info("Бот остановлен")
+        self.logger.info("Бот успешно остановлен")
         self.shutdown_event.set()
 
 
 async def main():
     """Точка входа"""
+    initialize_logging()
+
     bot = BotApplication()
 
     try:
         await bot.start()
     except KeyboardInterrupt:
-        bot.logger.info("Получен сигнал остановки")
+        bot.logger.info("Получен сигнал об остановке от пользователя")
         if bot.running:
             await bot.stop()
 

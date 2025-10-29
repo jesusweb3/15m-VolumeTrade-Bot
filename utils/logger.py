@@ -1,6 +1,7 @@
 # utils/logger.py
 import logging
 import sys
+import http.client
 from datetime import datetime
 from pathlib import Path
 
@@ -16,6 +17,56 @@ class MillisecondFormatter(logging.Formatter):
             s = datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S")
             s = f"{s}.{int(record.msecs):03d}"
         return s
+
+
+class FilteredStdout:
+    """Обёртка для stdout, фильтрующая шумные выводы"""
+
+    FILTER_PATTERNS = [
+        'method:',
+        'headers:',
+        'params:',
+        'body:',
+        'data:',
+        'code:',
+    ]
+
+    def __init__(self, original_stdout):
+        self.original_stdout = original_stdout
+        self._buffer = ""
+
+    def write(self, text: str) -> int:
+        """Фильтрует и пишет в stdout"""
+        if text is None:
+            return 0
+
+        self._buffer += text
+
+        if '\n' in self._buffer or len(self._buffer) > 1000:
+            lines = self._buffer.split('\n')
+            for line in lines[:-1]:
+                if not self._should_filter(line):
+                    self.original_stdout.write(line + '\n')
+            self._buffer = lines[-1]
+
+        return len(text)
+
+    def flush(self):
+        if self._buffer and not self._should_filter(self._buffer):
+            self.original_stdout.write(self._buffer)
+            self._buffer = ""
+        if hasattr(self.original_stdout, 'flush'):
+            self.original_stdout.flush()
+
+    @staticmethod
+    def _should_filter(line: str) -> bool:
+        """Проверяет, нужно ли фильтровать строку"""
+        if not line.strip():
+            return False
+        return any(pattern in line for pattern in FilteredStdout.FILTER_PATTERNS)
+
+    def __getattr__(self, name):
+        return getattr(self.original_stdout, name)
 
 
 def get_logger(name: str, level: int = logging.INFO) -> logging.Logger:
@@ -60,6 +111,26 @@ def get_logger(name: str, level: int = logging.INFO) -> logging.Logger:
     logger.propagate = False
 
     return logger
+
+
+def initialize_logging() -> None:
+    """
+    Инициализация логирования приложения.
+    Отключает verbose логи внешних библиотек и перехватывает print() statements.
+    """
+    http.client.HTTPConnection.debuglevel = 0
+
+    logging.getLogger('pyxt').setLevel(logging.CRITICAL)
+    logging.getLogger('pyxt.http').setLevel(logging.CRITICAL)
+    logging.getLogger('requests').setLevel(logging.CRITICAL)
+    logging.getLogger('urllib3').setLevel(logging.CRITICAL)
+    logging.getLogger('urllib3.connectionpool').setLevel(logging.CRITICAL)
+    logging.getLogger('telethon').setLevel(logging.WARNING)
+    logging.getLogger('telethon.client').setLevel(logging.WARNING)
+    logging.getLogger('http.client').setLevel(logging.CRITICAL)
+
+    sys.stdout = FilteredStdout(sys.stdout)
+    sys.stderr = FilteredStdout(sys.stderr)
 
 
 def set_log_level(level: int) -> None:

@@ -34,11 +34,6 @@ class TelegramAuth:
             self.logger.info("Клиент уже подключен")
             return self.client
 
-        self.logger.info(
-            "Инициализация TelegramClient с параметрами: "
-            "auto_reconnect=True, connection_retries=5, retry_delay=5s, timeout=10s"
-        )
-
         self.client = TelegramClient(
             str(self.session_path),
             self.config.api_id,
@@ -87,7 +82,6 @@ class TelegramAuth:
         """Корректное отключение клиента"""
         if self.client and self.client.is_connected():
             await self.client.disconnect()
-            self.logger.info("Клиент отключен")
 
     async def is_authorized(self) -> bool:
         """

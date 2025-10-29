@@ -13,20 +13,18 @@ async def process_signals_queue(signal_queue: asyncio.Queue, position_manager: P
         position_manager: Менеджер позиций
     """
     logger = get_logger(__name__)
-    logger.info("Процессор сигналов запущен")
 
     while True:
         try:
             signal = await signal_queue.get()
 
-            logger.info(f"Получен сигнал из очереди: {signal}")
+            logger.info(f"Получен сигнал из очереди, начинаем обработку: {signal}")
 
             await position_manager.open_position_with_signal(signal)
 
             signal_queue.task_done()
 
         except asyncio.CancelledError:
-            logger.info("Процессор сигналов остановлен")
             break
         except Exception as e:
             logger.error(f"Ошибка обработки сигнала из очереди: {e}", exc_info=True)

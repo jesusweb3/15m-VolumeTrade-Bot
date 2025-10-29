@@ -42,8 +42,6 @@ class XTClient:
 
     async def set_leverage(self, symbol: str, leverage: int) -> None:
         """Установка кредитного плеча для обеих сторон (Long/Short)"""
-        self.logger.info(f"Установка плеча {leverage}x для {symbol}")
-
         def _set():
             return self.perp.set_account_leverage(
                 symbol=self._normalize_symbol(symbol),
@@ -94,7 +92,6 @@ class XTClient:
             if contract_size <= 0:
                 raise RuntimeError(f"Некорректный contractSize: {contract_size}")
 
-            self.logger.info(f"Contract size для {symbol}: {contract_size}")
             return contract_size
 
         except Exception as e:
@@ -122,7 +119,7 @@ class XTClient:
         Returns:
             Order ID
         """
-        self.logger.info(f"Открытие {side} {position_side} позиции по {symbol}: qty={qty}, SL={sl_price}")
+        self.logger.info(f"Открытие {position_side} позиции по {symbol}: qty={qty}, SL={sl_price}")
 
         def _place():
             return self.perp.send_order(
@@ -148,7 +145,7 @@ class XTClient:
         result = resp.get("result", {})
         order_id = result.get("orderId") if isinstance(result, dict) else result
 
-        self.logger.info(f"Позиция открыта: orderId={order_id}, {position_side}")
+        self.logger.info(f"Позиция {position_side} открыта: orderId={order_id}")
 
         return str(order_id)
 

@@ -49,8 +49,8 @@ class PositionManager:
 
         return result
 
+    @staticmethod
     def split_tp_orders(
-            self,
             total_qty: int,
             tp_prices: List[float],
             contract_size: float
@@ -85,11 +85,6 @@ class PositionManager:
             orders.append({"price": price, "qty": qty})
             total_allocated += Decimal(str(qty))
 
-        self.logger.info(
-            f"Распределение TP: total={total_qty}, per_tp={int(rounded_qty_per_tp)}, "
-            f"first_tp={orders[0]['qty']}, allocated={int(total_allocated)}"
-        )
-
         return orders
 
     async def open_position_with_signal(self, signal: Signal) -> None:
@@ -100,8 +95,6 @@ class PositionManager:
             signal: Торговый сигнал
         """
         try:
-            self.logger.info(f"Обработка сигнала: {signal}")
-
             symbol = signal.asset.replace('/', '')
 
             await self.xt_client.set_leverage(symbol, signal.leverage)

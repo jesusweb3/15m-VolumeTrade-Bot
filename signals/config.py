@@ -56,7 +56,6 @@ class AuthConfig:
 class Channel:
     """Конфигурация канала для парсинга"""
 
-    name: str
     chat_id: int
     enabled: bool
 
@@ -79,15 +78,12 @@ class ChannelsConfig:
 
         channels = []
 
-        channel_prefixes = set()
-        for key in os.environ.keys():
-            if key.startswith('CHANNEL_') and not key.endswith('_ENABLED'):
-                prefix = key
-                channel_prefixes.add(prefix)
+        for i in range(1, 5):
+            channel_key = f"CHANNEL{i}"
+            enabled_key = f"CHANNEL{i}_ENABLED"
 
-        for prefix in channel_prefixes:
-            chat_id_str = os.getenv(prefix)
-            enabled_str = os.getenv(f"{prefix}_ENABLED", "false")
+            chat_id_str = os.getenv(channel_key)
+            enabled_str = os.getenv(enabled_key, "false")
 
             if not chat_id_str:
                 continue
@@ -99,10 +95,7 @@ class ChannelsConfig:
 
             enabled = enabled_str.lower() in ('true', '1', 'yes')
 
-            name = prefix.replace('CHANNEL_', '').lower()
-
             channels.append(Channel(
-                name=name,
                 chat_id=chat_id,
                 enabled=enabled
             ))

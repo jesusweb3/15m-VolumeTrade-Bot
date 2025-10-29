@@ -43,11 +43,15 @@ class BotApplication:
 
             self.logger.info("Бот активен и готов к работе")
 
-            await asyncio.gather(
-                parser_task,
-                processor_task,
-                self.shutdown_event.wait()
-            )
+            try:
+                await asyncio.gather(
+                    parser_task,
+                    processor_task,
+                    self.shutdown_event.wait()
+                )
+            except asyncio.CancelledError:
+                self.logger.info("Получен сигнал об остановке от пользователя")
+                raise
 
         except Exception as e:
             self.logger.error(f"Критическая ошибка: {e}", exc_info=True)
@@ -78,9 +82,7 @@ async def main():
     try:
         await bot.start()
     except KeyboardInterrupt:
-        bot.logger.info("Получен сигнал об остановке от пользователя")
-        if bot.running:
-            await bot.stop()
+        pass
 
 
 if __name__ == "__main__":

@@ -60,7 +60,8 @@ class XTClient:
             if rc == 0:
                 self.logger.info(f"Плечо {leverage}x установлено для {symbol}")
             else:
-                error_msg = resp.get("mc") or resp.get("msgInfo") or resp.get("msg")
+                error_info = resp.get("error", {})
+                error_msg = error_info.get("msg") if isinstance(error_info, dict) else resp.get("msgInfo", "Unknown error")
                 raise RuntimeError(f"Ошибка установки плеча: {error_msg}")
 
         except Exception as e:
@@ -84,6 +85,7 @@ class XTClient:
             data = await asyncio.to_thread(_get)
 
             if data.get("returnCode") != 0 or not data.get("result"):
+                self.logger.error(f"Полный ответ от API при ошибке получения контракта: {data}")
                 raise RuntimeError(f"Ошибка получения контракта: {data}")
 
             result = data["result"]
@@ -139,7 +141,8 @@ class XTClient:
 
         rc = resp.get("rc", resp.get("returnCode"))
         if rc != 0:
-            error_msg = resp.get("mc") or resp.get("msgInfo") or resp.get("msg")
+            error_info = resp.get("error", {})
+            error_msg = error_info.get("msg") if isinstance(error_info, dict) else resp.get("msgInfo", "Unknown error")
             raise RuntimeError(f"Ошибка открытия позиции: {error_msg}")
 
         result = resp.get("result", {})
@@ -196,7 +199,8 @@ class XTClient:
 
                 rc = resp.get("rc", resp.get("returnCode"))
                 if rc != 0:
-                    error_msg = resp.get("mc") or resp.get("msgInfo") or resp.get("msg")
+                    error_info = resp.get("error", {})
+                    error_msg = error_info.get("msg") if isinstance(error_info, dict) else resp.get("msgInfo", "Unknown error")
                     self.logger.error(f"TP [{i}] ошибка: {error_msg}")
                     continue
 

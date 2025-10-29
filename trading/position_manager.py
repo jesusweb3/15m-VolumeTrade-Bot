@@ -97,7 +97,13 @@ class PositionManager:
         try:
             symbol = signal.asset.replace('/', '')
 
-            await self.xt_client.set_leverage(symbol, signal.leverage)
+            try:
+                await self.xt_client.set_leverage(symbol, signal.leverage)
+            except RuntimeError as e:
+                if "invalid symbol" in str(e):
+                    self.logger.info(f"Актив {signal.asset} отсутствует на бирже, пропускаем сигнал")
+                    return
+                raise
 
             contract_size = await self.xt_client.get_contract_size(symbol)
 

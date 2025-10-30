@@ -24,19 +24,22 @@ class PositionManager:
             contract_size: float
     ) -> int:
         """
-        Расчет размера позиции
+        Расчет размера позиции по формуле XT:
+        origQty = Truncate((Balance * Percent * Leverage) / (Mark_price * Contract_size))
 
         Args:
-            entry_price: Цена входа
+            entry_price: Цена входа (Mark_price)
             leverage: Кредитное плечо
-            contract_size: Размер контракта (минимальный increment)
+            contract_size: Размер контракта (Contract multiplier)
 
         Returns:
             Размер позиции в контрактах (целое число)
         """
         margin = self.config.balance * (self.config.amount / 100)
         volume = margin * leverage
-        qty_decimal = volume / entry_price
+
+        denominator = entry_price * contract_size
+        qty_decimal = volume / denominator
 
         contract_size_decimal = Decimal(str(contract_size))
         qty_decimal_obj = Decimal(str(qty_decimal))
@@ -46,7 +49,7 @@ class PositionManager:
 
         self.logger.info(
             f"Расчет позиции: margin={margin:.2f} USDT, volume={volume:.2f} USDT, "
-            f"qty={qty_decimal:.4f} -> rounded={result} (contract_size={contract_size})"
+            f"qty={qty_decimal:.4f} -> rounded={result} (entry_price={entry_price}, contract_size={contract_size})"
         )
 
         return result
